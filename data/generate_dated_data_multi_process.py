@@ -1,9 +1,11 @@
 import os, math
 import time
+import argparse
 
 import numpy as np
 import pandas as pd
 import geopy.distance
+from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 
 '''
@@ -21,6 +23,41 @@ from concurrent.futures import ProcessPoolExecutor
         - Costing! e.g., for PEMS-BAY, it takes more than two hours for 20% missing values
 '''
 
+def get_0_1_array(array, rate = 0.2, seed = 100):
+    """
+    Compute the mask of full dataset
+    """
+    zeros_num = int(array.size * rate)
+    new_array = np.ones(array.size)
+    new_array[:zeros_num] = 0
+    if seed != None:
+        print('Seed:', seed)
+        np.random.seed(seed)
+    np.random.shuffle(new_array)
+    re_array = new_array.reshape(array.shape)
+    #print(re_array.shape)
+    #print(re_array.sum(0)[:20])
+    return re_array
+
+def split_data_by_ratio(x, y, dateTime, val_ratio, test_ratio):
+    idx = np.arange(x.shape[0])
+    # print('idx shape:',idx.shape)
+    idx_shuffle = idx.copy()
+    # np.random.shuffle(idx_shuffle)
+    data_len = x.shape[0]
+    test_x = x[idx_shuffle[-int(data_len * test_ratio):]]
+    test_y = y[idx_shuffle[-int(data_len * test_ratio):]]
+    dateTime_test = dateTime[idx_shuffle[-int(data_len * test_ratio):]]
+
+    val_x = x[idx_shuffle[-int(data_len * (test_ratio + val_ratio)):-int(data_len * test_ratio)]]
+    val_y = y[idx_shuffle[-int(data_len * (test_ratio + val_ratio)):-int(data_len * test_ratio)]]
+    dateTime_val = dateTime[idx_shuffle[-int(data_len * (test_ratio + val_ratio)):-int(data_len * test_ratio)]]
+
+    train_x = x[idx_shuffle[:-int(data_len * (test_ratio + val_ratio))]]
+    train_y = y[idx_shuffle[:-int(data_len * (test_ratio + val_ratio))]]
+    dateTime_train = dateTime[idx_shuffle[:-int(data_len * (test_ratio + val_ratio))]]
+
+    return train_x,train_y,dateTime_train,val_x,val_y,dateTime_val,test_x,test_y,dateTime_test
 
 def get_dist_matrix(sensor_locs):
     """
@@ -89,7 +126,7 @@ def cal_statistics(idx):  # index in (N, L, D)
 
 
 
-def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, mask_ones_proportion=0.8):
+def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, mask_ones_proportion=0.8, seed=100):
     """
         Prepare training & testing data integrating local statistic features
     :param output_dit: output path for saving
@@ -117,29 +154,41 @@ def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, 
     max_speed = speed_tensor.max().max()
     speed_tensor = speed_tensor / max_speed  # (N, D)
 
+    array = np.array(data)
+    array_mask = get_0_1_array(array, 1 - mask_ones_proportion, seed) #(N, D)
+
     date_array = df.index.values  # (N)
     print(speed_tensor.shape, date_array.shape)
 
-    x, dateTime, y = [], [], []
+    x, dateTime, y, mask, mask_target = [], [], [], [], []
     min_t = abs(min(x_offsets))
     max_t = abs(num_samples - abs(max(y_offsets)))  # Exclusive
     for t in range(min_t, max_t):
         x_t = speed_tensor[t + x_offsets, ...]
         dateTime_t = date_array[t + x_offsets]
         y_t = speed_tensor[t + y_offsets, ...]
+        mask_t = array_mask[t + x_offsets, ...]
+        mask_target_t = array_mask[t + y_offsets, ...]
         x.append(x_t)
         dateTime.append(dateTime_t)
         y.append(y_t)
+        mask.append(mask_t)
+        mask_target.append(mask_target_t)
     speed_sequences = np.stack(x, axis=0)  # (N, L, D)
     dateTime = np.stack(dateTime, axis=0)  # (N, L)
-    speed_labels = np.stack(y, axis=0)  # (N, L, D)
+    speed_labels = np.stack(y, axis=0)     # (N, L, D)
+    Mask = np.stack(mask, axis=0)          # (N, L, D)
+    Mask_target = np.stack(mask_target, axis=0) # (N, L, D)
+
 
     # using zero-one mask to randomly set elements to zeros
     if masking:
         print('Split Speed/label finished. Start to generate Mask, Delta_t, Last_observed_X ...')
-        np.random.seed(1024)
-        Mask = np.random.choice([0, 1], size=(speed_sequences.shape),
+        np.random.seed(seed)
+        # we generate new Mask, don't use the below one anymore --nkh
+        Mask_ori = np.random.choice([0, 1], size=(speed_sequences.shape),
                                 p=[1 - mask_ones_proportion, mask_ones_proportion])  # (N, L, D)
+        # import pdb; pdb.set_trace()
         speed_sequences = np.multiply(speed_sequences, Mask)
 
         # temporal information -> to consider extracting the statistic feature from longer history data (caan probablement improve the performance)
@@ -205,20 +254,35 @@ def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, 
             dists_one_all_array.append(dists_one_all)
             sorted_node_ids_array.append(sorted_node_ids)
 
-        executor = ProcessPoolExecutor()  # default, using nbr_CPU processes
+        # executor = ProcessPoolExecutor()  # default, using nbr_CPU processes
+        # idx_miss = list(range(missing_index[0].shape[0]))
+        # nbr_all = len(idx_miss)
+        # nbr_temp = 0
+        # start = time.time()
+        # current_ratio = 0
+        # for res in executor.map(cal_statistics, idx_miss):
+        #     nbr_temp += 1
+        #     finished_ratio = nbr_temp // (0.01 * nbr_all)
+        #     if finished_ratio != current_ratio:
+        #         end = time.time()
+        #         print("{} % of the statistic features are calculated ! Time cost: {}s".format(
+        #             nbr_temp // (0.01 * nbr_all), end - start))
+        #         current_ratio = finished_ratio
+
+        num_processes = min(os.cpu_count(), 16)
+        chunksize = 1000
+
+        executor = ProcessPoolExecutor(max_workers=num_processes)
         idx_miss = list(range(missing_index[0].shape[0]))
         nbr_all = len(idx_miss)
-        nbr_temp = 0
+
         start = time.time()
-        current_ratio = 0
-        for res in executor.map(cal_statistics, idx_miss):
-            nbr_temp += 1
-            finished_ratio = nbr_temp // (0.01 * nbr_all)
-            if finished_ratio != current_ratio:
-                end = time.time()
-                print("{} % of the statistic features are calculated ! Time cost: {}s".format(
-                    nbr_temp // (0.01 * nbr_all), end - start))
-                current_ratio = finished_ratio
+        with tqdm(total=nbr_all, desc="Calculating statistic features") as pbar:
+            for _ in executor.map(cal_statistics, idx_miss, chunksize=chunksize):
+                pbar.update(chunksize)
+        executor.shutdown(wait=True)
+        end = time.time()
+        print(f"All statistic features are calculated! Time cost: {end - start:.2f}s")
 
     print('Generate Mask, Last/Closest_observed_X, X_mean_t/s, Delta_t/s finished.')
 
@@ -242,7 +306,7 @@ def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, 
 
 
 def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, masking, L, S,
-                            train_val_test_split=[0.7, 0.1, 0.2], mask_ones_proportion=0.8):
+                            train_val_test_split=[0.7, 0.1, 0.2], mask_ones_proportion=0.8, seed=100):
     """
         To generate the splitted datasets
     :param traffic_df_filename:
@@ -280,23 +344,27 @@ def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, mask
         dist_mx,
         L,
         S,
-        mask_ones_proportion
+        mask_ones_proportion,
+        seed
     )
     print("x shape: ", x.shape, "dateTime shape: ", dateTime.shape, ", y shape: ", y.shape)
 
     # Write the data into npz file.
-    num_samples = x.shape[0]
-    num_train = round(num_samples * train_val_test_split[0])
-    num_test = round(num_samples * train_val_test_split[2])
-    num_val = num_samples - num_test - num_train
+    # num_samples = x.shape[0]
+    # num_train = round(num_samples * train_val_test_split[0])
+    # num_test = round(num_samples * train_val_test_split[2])
+    # num_val = num_samples - num_test - num_train
 
-    x_train, dateTime_train, y_train = x[:num_train], dateTime[:num_train], y[:num_train]
-    x_val, dateTime_val, y_val = (
-        x[num_train: num_train + num_val],
-        dateTime[num_train: num_train + num_val],
-        y[num_train: num_train + num_val],
-    )
-    x_test, dateTime_test, y_test = x[-num_test:], dateTime[-num_test:], y[-num_test:]
+    # x_train, dateTime_train, y_train = x[:num_train], dateTime[:num_train], y[:num_train]
+    # x_val, dateTime_val, y_val = (
+    #     x[num_train: num_train + num_val],
+    #     dateTime[num_train: num_train + num_val],
+    #     y[num_train: num_train + num_val],
+    # )
+    # x_test, dateTime_test, y_test = x[-num_test:], dateTime[-num_test:], y[-num_test:]
+
+    x_train,y_train,dateTime_train,x_val,y_val,dateTime_val,x_test,y_test,dateTime_test = \
+        split_data_by_ratio(x, y, dateTime, train_val_test_split[1], train_val_test_split[2])
 
     for cat in ["train", "val", "test"]:
         _x, _dateTime, _y = locals()["x_" + cat], locals()["dateTime_" + cat], locals()["y_" + cat]
@@ -305,7 +373,7 @@ def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, mask
         # dateTime: (N, L)
         # y: (N, L, D)
         np.savez_compressed(
-            os.path.join(output_dir, "{}_missRatio_{:.2f}%_dateTime.npz".format(cat, (1 - mask_ones_proportion) * 100)),
+            os.path.join(output_dir, "missRatio_{:.2f}%_dateTime_{}.npz".format((1 - mask_ones_proportion) * 100), cat),
             x=_x,
             dateTime=_dateTime,
             y=_y,
@@ -318,17 +386,27 @@ def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, mask
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process the traffic data.")
+    parser.add_argument('--dataset', type=str, default='METR_LA/', help='["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR_LA/"]')
+    parser.add_argument('--mask_ratio', type=float, default=0.2, help='Ratio of zeros in the mask')
+    parser.add_argument('--seed', type=int, default=100, help='Seed of mask')
+    parser.add_argument('--L', type=int, default=12, help='the recent sample numbers')
+    parser.add_argument('--S', type=int, default=5, help='the nearby node numbers')
+    # Parse arguments
+    args = parser.parse_args()
+
     root_path = "./Datasets/"
-    datasets = ["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR-LA/"]
-    dataset = datasets[4]
+    seed = args.seed
+    L = args.L
+    S = args.S
+    dataset = args.dataset
+    mask_ones_proportion=1-args.mask_ratio
     data_path = root_path + dataset  # "PEMS-BAY"
 
     traffic_df_filename = data_path + dataset[:-1].lower() + '.h5'  # raw_hdf file
     dist_filename = data_path + "graph_sensor_locations.csv"
     output_dir = data_path
     masking = True
-    L = 12
-    S = 5
     generate_train_val_test(traffic_df_filename, dist_filename, output_dir, masking, L, S,
-                            train_val_test_split=[0.7, 0.1, 0.2], mask_ones_proportion=0.8)
+                            train_val_test_split=[0.7, 0.1, 0.2], mask_ones_proportion=mask_ones_proportion, seed=seed)
 

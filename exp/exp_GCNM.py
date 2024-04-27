@@ -13,7 +13,8 @@ from data.gcnm_utils import load_dataset, get_dist_matrix, get_undirect_adjacenc
 from data.generate_dated_data import generate_train_val_test, retrieve_hist
 from utils.tools import EarlyStopping, adjust_learning_rate
 from utils.metrics import metric, masked_mse, masked_mae, masked_mape
-from models.model import STF_Informer, STF_InformerStack, DMSTGCN, gwnet, GCNM, GCNMdynamic
+# from models.model import STF_Informer, STF_InformerStack, DMSTGCN, gwnet, GCNM, GCNMdynamic
+from models.model import GCNM, GCNMdynamic
 
 warnings.filterwarnings('ignore')
 
@@ -33,10 +34,10 @@ class Exp_GCNM(Exp_GCNMbasic):
     def _build_model(self):
         #import different parameters for different models
         model_dict = {
-            'STF_Informer': STF_Informer,
-            'STF_InformerStack': STF_InformerStack,
-            'DMSTGCN': DMSTGCN,
-            'gwnet': gwnet,
+            # 'STF_Informer': STF_Informer,
+            # 'STF_InformerStack': STF_InformerStack,
+            # 'DMSTGCN': DMSTGCN,
+            # 'gwnet': gwnet,
             'GCNM': GCNM,
             'GCNMdynamic': GCNMdynamic
         }
@@ -149,7 +150,8 @@ class Exp_GCNM(Exp_GCNMbasic):
 
         # full_dataset: (N, D)
         if self.mask_option == "random":
-            stat_file = os.path.join(self.root_path, "random_missing", "randMissRatio_{:.2f}%.npz".format((1 - self.mask_ones_proportion) * 100))
+            # stat_file = os.path.join(self.root_path, "random_missing", "randMissRatio_{:.2f}%.npz".format((1 - self.mask_ones_proportion) * 100))
+            stat_file = os.path.join(self.root_path, "missRatio_{:.2f}%_dateTime.npz".format((1 - self.mask_ones_proportion) * 100))
         else:
             stat_file = os.path.join(self.root_path, "mix_missing",
                                      "mixMissRatio_{:.2f}%.npz".format((1 - self.mask_ones_proportion) * 100))

@@ -153,6 +153,7 @@ def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportio
     data = {}
     df = pd.read_hdf(traffic_df_filename)
     for cat in ['train', 'val', 'test']:
+        # import pdb; pdb.set_trace()
         file_save_path = stat_file[:-4] + '_' + cat + '.npz'  # e.g., 'x.npz' -> 'x_train.npz'
         cat_data = np.load(file_save_path)
         #x, dateTime, y: (N, 8, L, D), (N, L), (N, L, D)
@@ -165,6 +166,7 @@ def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportio
     data['train_loader'] = DataLoader(data['x_train'], data['dateTime_train'], data['y_train'], batch_size)
     data['val_loader'] = DataLoader(data['x_val'], data['dateTime_val'], data['y_val'], batch_size)
     data['test_loader'] = DataLoader(data['x_test'], data['dateTime_test'], data['y_test'], batch_size)
+    # import pdb; pdb.set_trace()
     return df, data
 
 ## newly added method from generating the adjacency matrix: directed graph

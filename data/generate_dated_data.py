@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
     Input:  "xxx.csv" with first column as "Date"
     Output: the saved files for preprocessed datasets, i.e., "train/val/test_dataTime.npz" including:
         - x
-        - dateTime
+        - dateTime   # figure out 
         - y
         - max_speed
         - x_offsets
@@ -90,6 +90,7 @@ def prepare_dataset(output_dir, df, x_offsets, y_offsets, masking, mask_option, 
     dateTime = np.stack(dateTime, axis=0)  # (N, L)
     speed_labels = np.stack(y, axis=0)  # (N, L, D)
     win_size = speed_sequences.shape[1]
+    # import pdb; pdb.set_trace()
 
     # using zero-one mask to randomly set elements to zeros
     if masking:
@@ -99,6 +100,7 @@ def prepare_dataset(output_dir, df, x_offsets, y_offsets, masking, mask_option, 
             # Mask option 1: random masking
             Mask = np.random.choice([0, 1], size=(speed_sequences.shape),
                                     p=[1 - mask_ones_proportion, mask_ones_proportion])  # (N, L, D)
+            
         else:
             # Mask option 2: block & random masking 50/50, fix masking window size: 12 points, i.e. 1 hour
             mask_zeros_indiv = (1-mask_ones_proportion) / 2
@@ -278,6 +280,7 @@ def generate_stat_features_files(traffic_df_filename, dist_filename, output_dir,
             # y: (N, L, D)
         """
     df = pd.read_hdf(traffic_df_filename)
+    # import pdb; pdb.set_trace()
     #df = df.iloc[:1000,:]
     sensor_locs = np.genfromtxt(dist_filename, delimiter=',')
     sensor_ids, sensor_id_to_ind, dist_mx = get_dist_matrix(sensor_locs)
@@ -454,8 +457,8 @@ def retrieve_hist(dateTime, full_data, nh, nd, nw, tau):
 
 if __name__ == "__main__":
     root_path = "./Datasets/"
-    datasets = ["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR-LA/"]
-    dataset = datasets[4]
+    datasets = ["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR_LA/"]
+    dataset = datasets[-1]
     data_path = root_path + dataset  # "PEMS-BAY"
 
     traffic_df_filename = data_path + dataset[:-1].lower() + '.h5'  # raw_hdf file

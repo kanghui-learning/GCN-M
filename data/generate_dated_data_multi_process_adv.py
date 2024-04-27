@@ -6,7 +6,7 @@ import pandas as pd
 import geopy.distance
 import multiprocessing
 
-from data.gcnm_utils import get_dist_matrix
+from gcnm_utils import get_dist_matrix
 
 
 '''
@@ -366,8 +366,8 @@ def retrieve_hist(dateTime, full_data, nh, nd, nw, tau):
 
 if __name__ == "__main__":
     root_path = "./Datasets/"
-    datasets = ["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR-LA/"]
-    dataset = datasets[4]
+    datasets = ["PEMS/PEMS03/", "PEMS/PEMS04/", "PEMS/PEMS07/", "PEMS/PEMS08/", "PEMS-BAY/", "METR_LA/"]
+    dataset = datasets[-1]
     data_path = root_path + dataset  # "PEMS-BAY"
 
     traffic_df_filename = data_path + dataset[:-1].lower() + '.h5'  # raw_hdf file
