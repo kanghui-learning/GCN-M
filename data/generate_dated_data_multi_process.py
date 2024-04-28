@@ -373,7 +373,7 @@ def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, mask
         # dateTime: (N, L)
         # y: (N, L, D)
         np.savez_compressed(
-            os.path.join(output_dir, "missRatio_{:.2f}%_dateTime_{}.npz".format((1 - mask_ones_proportion) * 100), cat),
+            os.path.join(output_dir, "missRatio_{:.2f}%_dateTime_{}.npz".format((1 - mask_ones_proportion) * 100, cat)),
             x=_x,
             dateTime=_dateTime,
             y=_y,

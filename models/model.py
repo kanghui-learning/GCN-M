@@ -259,17 +259,17 @@ class GCNMdynamic(nn.Module):
                                                    out_channels=dilation_channels,
                                                    kernel_size=(1,kernel_size),dilation=new_dilation))
 
-                self.gate_convs.append(nn.Conv1d(in_channels=residual_channels,
+                self.gate_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                  out_channels=dilation_channels,
                                                  kernel_size=(1, kernel_size), dilation=new_dilation))
 
                 # 1x1 convolution for residual connection
-                self.residual_convs.append(nn.Conv1d(in_channels=dilation_channels,
+                self.residual_convs.append(nn.Conv2d(in_channels=dilation_channels,
                                                      out_channels=residual_channels,
                                                      kernel_size=(1, 1)))
 
                 # 1x1 convolution for skip connection
-                self.skip_convs.append(nn.Conv1d(in_channels=dilation_channels,
+                self.skip_convs.append(nn.Conv2d(in_channels=dilation_channels,
                                                  out_channels=skip_channels,
                                                  kernel_size=(1, 1)))
                 self.bn.append(nn.BatchNorm2d(residual_channels))
@@ -318,6 +318,7 @@ class GCNMdynamic(nn.Module):
         z = torch.unsqueeze(z, dim=-1) # (B, L, D) -> (B, L, D, 1)
         x_hist = torch.unsqueeze(x_hist, dim=-1)#(B, n*tau, L, D, 1)
         x_hist = x_hist.transpose(1, 2).contiguous() #(B, L, n*tau, D, F)
+        # import pdb; pdb.set_trace()
 
         #(B, L, D, F), (B, L, n*tau, D, F)
 
