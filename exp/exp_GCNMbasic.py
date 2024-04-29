@@ -35,6 +35,8 @@ class Exp_GCNMbasic(object):
         self.masking = json.loads(self.model_config['masking'].lower())
         self.pred_len = int(self.model_config['pred_len'])
         self.add_supports = json.loads(self.model_config['add_supports'].lower())
+        self.blocks = int(self.model_config['blocks'])
+        self.kernel_size = int(self.model_config['kernel_size'])
 
         # training config
         self.use_gpu = json.loads(self.training_config['use_gpu'].lower())

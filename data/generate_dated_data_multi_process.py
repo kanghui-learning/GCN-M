@@ -328,10 +328,10 @@ def generate_train_val_test(traffic_df_filename, dist_filename, output_dir, mask
     sensor_locs = np.genfromtxt(dist_filename, delimiter=',')
     sensor_ids, sensor_id_to_ind, dist_mx = get_dist_matrix(sensor_locs)
     x_offsets = np.sort(
-        np.concatenate((np.arange(-11, 1, 1),))
+        np.concatenate((np.arange(1-L, 1, 1),))
     )
     # Predict the next one hour
-    y_offsets = np.sort(np.arange(1, 13, 1))
+    y_offsets = np.sort(np.arange(1, L+1, 1))
     # x: (N, 8, L, D)
     # dateTime: (N, L)
     # y: (N, L, D)

@@ -1,6 +1,7 @@
 import os
 import time
 import warnings
+import wandb
 
 import numpy as np
 import torch
@@ -57,13 +58,13 @@ class Exp_GCNM(Exp_GCNMbasic):
                 addaptadj=True,
                 aptinit=None,
                 in_dim=self.in_dim,
-                out_dim=12,
+                out_dim=self.L,
                 residual_channels=32,
                 dilation_channels=32,
                 skip_channels=256,
                 end_channels=512,
-                kernel_size=2,
-                blocks=4, layers=2
+                kernel_size=self.kernel_size,
+                blocks=self.blocks, layers=2
             )
         elif self.model_name == 'gwnet':
             model = model_dict[model_name](
@@ -94,49 +95,51 @@ class Exp_GCNM(Exp_GCNMbasic):
         total_loss_mse = []
         total_loss_mae = []
         total_loss_mape = []
-        for i, (batch_x, batch_dateTime, batch_y) in enumerate(vali_loader.get_iterator()):
-            # batch_x: (B, 8, L, D)
-            # batch_y: (B, L, D)
+        with torch.no_grad():
+            for i, (batch_x, batch_dateTime, batch_y) in enumerate(vali_loader.get_iterator()):
+                # batch_x: (B, 8, L, D)
+                # batch_y: (B, L, D)
 
-            if self.model_name == "gwnet":
-                batch_x = batch_x[:, 0, ...]  # (B, 8, L, D) -> (B, L, D)
-                batch_x = torch.Tensor(batch_x).to(self.device)
-                batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
+                if self.model_name == "gwnet":
+                    batch_x = batch_x[:, 0, ...]  # (B, 8, L, D) -> (B, L, D)
+                    batch_x = torch.Tensor(batch_x).to(self.device)
+                    batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
 
-                if self.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)  # (B, L, D) -> (B, L, D)
-                else:
-                    outputs = self.model(batch_x)
+                    if self.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = self.model(batch_x)  # (B, L, D) -> (B, L, D)
+                    else:
+                        outputs = self.model(batch_x)
 
-            elif self.model_name == "GCNM" or self.model_name == "GCNMdynamic":
-                x_hist = retrieve_hist(batch_dateTime, self.full_dataset, nh=self.nh, nd=self.nd, nw=self.nw,
-                                       tau=self.tau)
+                elif self.model_name == "GCNM" or self.model_name == "GCNMdynamic":
+                    x_hist = retrieve_hist(batch_dateTime, self.full_dataset, nh=self.nh, nd=self.nd, nw=self.nw,
+                                        tau=self.tau)
 
-                x_hist = torch.Tensor(x_hist).to(self.device)
-                batch_x = torch.Tensor(batch_x).to(self.device)  # (B, 8, L, D)
-                batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
+                    x_hist = torch.Tensor(x_hist).to(self.device)
+                    batch_x = torch.Tensor(batch_x).to(self.device)  # (B, 8, L, D)
+                    batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
 
-                if self.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x, x_hist)  # (B, 8, L, D), (B, n*tau, L, D) -> [N, L, D]
-                else:
-                    outputs = self.model(batch_x, x_hist)
+                    if self.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = self.model(batch_x, x_hist)  # (B, 8, L, D), (B, n*tau, L, D) -> [N, L, D]
+                    else:
+                        outputs = self.model(batch_x, x_hist)
 
-            batch_y = batch_y[:, -self.pred_len:, :].to(self.device) #(N, L, D)
+                batch_y = batch_y[:, -self.pred_len:, :].to(self.device) #(N, L, D)
 
-            pred = outputs.detach().cpu() # (B, L, D)
-            true = batch_y.detach().cpu()
-            pred = torch.mul(pred, torch.Tensor(self.max_speed))
-            true = torch.mul(true, torch.Tensor(self.max_speed))
+                pred = outputs.detach().cpu() # (B, L, D)
+                true = batch_y.detach().cpu()
+                pred = torch.mul(pred, torch.Tensor(self.max_speed))
+                true = torch.mul(true, torch.Tensor(self.max_speed))
 
-            loss_mse = masked_mse(pred, true, 0)
-            loss_mae = masked_mae(pred, true, 0)
-            loss_mape = masked_mape(pred, true, 0)
+                loss_mse = masked_mse(pred, true, 0)
+                loss_mae = masked_mae(pred, true, 0)
+                loss_mape = masked_mape(pred, true, 0)
 
-            total_loss_mse.append(loss_mse)
-            total_loss_mae.append(loss_mae)
-            total_loss_mape.append(loss_mape)
+                total_loss_mse.append(loss_mse)
+                total_loss_mae.append(loss_mae)
+                total_loss_mape.append(loss_mape)
+
         total_loss_mse = np.average(total_loss_mse)
         total_loss_mae = np.average(total_loss_mae)
         total_loss_mape = np.average(total_loss_mape)
@@ -189,6 +192,7 @@ class Exp_GCNM(Exp_GCNMbasic):
             train_loader.shuffle()
             for i, (batch_x, batch_dateTime, batch_y) in enumerate(train_loader.get_iterator()):
 
+                num_batch = train_loader.num_batch
                 iter_count += 1
 
                 model_optim.zero_grad()
@@ -228,6 +232,10 @@ class Exp_GCNM(Exp_GCNMbasic):
 
                 if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                    wandb.log({
+                        "loss": loss.item(),
+                        "iters": epoch * num_batch + i + 1,
+                    })
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.train_epochs - epoch) * (train_steps // self.batch_size) - i)
                     print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
@@ -252,6 +260,17 @@ class Exp_GCNM(Exp_GCNMbasic):
 
             print("\n Test_mse: {0:.7f} Test_mae: {1:.7f} Test_mape: {2:.7f}".format(test_loss_mse, test_loss_mae,
                                                                                      test_loss_mape))
+            wandb.log({
+                "Epoch": epoch + 1,
+                "Steps": train_steps,
+                "Train_mae": train_loss,
+                "Vali_mse": vali_loss_mse,
+                "Test_mse": test_loss_mse,
+                "Vali_mape": vali_loss_mape,
+                "Test_mae": test_loss_mae,
+                "Test_mape": test_loss_mape,
+                "Vali_mae": vali_loss_mae,
+            }, step = epoch)
             early_stopping(vali_loss_mse, self.model, self.save_path)
 
             if early_stopping.early_stop:
@@ -271,39 +290,39 @@ class Exp_GCNM(Exp_GCNMbasic):
 
         preds = []
         trues = []
+        with torch.no_grad():
+            for i, (batch_x, batch_dateTime, batch_y) in enumerate(test_loader.get_iterator()):
+                if self.model_name == "gwnet":
+                    batch_x = batch_x[:, 0, ...]  # (B, 8, L, D) -> (B, L, D)
+                    batch_x = torch.Tensor(batch_x).to(self.device)
+                    batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
 
-        for i, (batch_x, batch_dateTime, batch_y) in enumerate(test_loader.get_iterator()):
-            if self.model_name == "gwnet":
-                batch_x = batch_x[:, 0, ...]  # (B, 8, L, D) -> (B, L, D)
-                batch_x = torch.Tensor(batch_x).to(self.device)
-                batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
+                    if self.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = self.model(batch_x)  # (B, L, D) -> (B, L, D)
+                    else:
+                        outputs = self.model(batch_x)
 
-                if self.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)  # (B, L, D) -> (B, L, D)
-                else:
-                    outputs = self.model(batch_x)
+                elif self.model_name == "GCNM" or self.model_name == "GCNMdynamic":
+                    x_hist = retrieve_hist(batch_dateTime, self.full_dataset, nh=self.nh, nd=self.nd, nw=self.nw,
+                                        tau=self.tau)  # (B, L), Dataframe (N, D) -> x_hist:(B, nw*tau + nd*tau + nh *tau, L, D)
 
-            elif self.model_name == "GCNM" or self.model_name == "GCNMdynamic":
-                x_hist = retrieve_hist(batch_dateTime, self.full_dataset, nh=self.nh, nd=self.nd, nw=self.nw,
-                                       tau=self.tau)  # (B, L), Dataframe (N, D) -> x_hist:(B, nw*tau + nd*tau + nh *tau, L, D)
+                    x_hist = torch.Tensor(x_hist).to(self.device)
+                    batch_x = torch.Tensor(batch_x).to(self.device)  # (B, 8, L, D)
+                    batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
 
-                x_hist = torch.Tensor(x_hist).to(self.device)
-                batch_x = torch.Tensor(batch_x).to(self.device)  # (B, 8, L, D)
-                batch_y = torch.Tensor(batch_y).to(self.device)  # (B, L, D)
+                    if self.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = self.model(batch_x, x_hist)  # (B, 8, L, D), (B, n*tau, L, D) -> [N, L, D]
+                    else:
+                        outputs = self.model(batch_x, x_hist)
 
-                if self.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x, x_hist)  # (B, 8, L, D), (B, n*tau, L, D) -> [N, L, D]
-                else:
-                    outputs = self.model(batch_x, x_hist)
+                batch_y = batch_y[:, -self.pred_len:, :].to(self.device)  # (B, pred_len, D)
+                pred = outputs.detach().cpu().numpy() * self.max_speed  # .squeeze()
+                true = batch_y.detach().cpu().numpy() * self.max_speed # .squeeze()
 
-            batch_y = batch_y[:, -self.pred_len:, :].to(self.device)  # (B, pred_len, D)
-            pred = outputs.detach().cpu().numpy() * self.max_speed  # .squeeze()
-            true = batch_y.detach().cpu().numpy() * self.max_speed # .squeeze()
-
-            preds.append(pred)
-            trues.append(true)
+                preds.append(pred)
+                trues.append(true)
 
         #print('test shape 1:', preds.shape, trues.shape)
         preds = np.concatenate(preds, axis=0)   # [B, L, D] -> [N, L, D]
@@ -315,6 +334,11 @@ class Exp_GCNM(Exp_GCNMbasic):
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print('[Average value] mae:{}, rmse:{}, mape:{}'.format(mae, rmse, mape))
+        wandb.log({
+            "Test Average mae": mae,
+            "Test Average rmse": rmse,
+            "Test Average mape": mape,
+        })
 
         np.save(self.save_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(self.save_path + 'pred.npy', preds)

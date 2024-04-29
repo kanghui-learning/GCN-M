@@ -274,7 +274,8 @@ class GCNMdynamic(nn.Module):
                                                  kernel_size=(1, 1)))
                 self.bn.append(nn.BatchNorm2d(residual_channels))
                 new_dilation *=2
-                receptive_field += additional_scope
+                receptive_field += additional_scope  # increase
+                # print(f"receptive_field: {receptive_field}")
                 additional_scope *= 2
                 if self.gcn_bool:
                     self.gconv.append(gcn_gcnm_dynamic(dilation_channels,residual_channels,dropout,support_len=self.supports_len))
@@ -332,7 +333,7 @@ class GCNMdynamic(nn.Module):
                 """
 
         in_len = input.size(3)  # (N, F, D, L), here F=1
-        if in_len < self.receptive_field:  # receptive_filed = 12 + 1
+        if in_len < self.receptive_field:  # receptive_filed = 12 + 1    
             x = nn.functional.pad(input, (self.receptive_field - in_len, 0, 0, 0))  # (N, residual_channels, D, L+1)
         else:
             x = input
@@ -351,13 +352,14 @@ class GCNMdynamic(nn.Module):
         nodevecInit_2 = self.emb2(self.idx)  # (D, node_dim=residual_channels)
         # WaveNet layers
         for i in range(self.blocks * self.layers):
+            # print(f"x.shape: {x.shape}")
             residual = x
             # dilated convolution
             filter = self.filter_convs[i](residual)  # kernel=(1, 2)
             filter = torch.tanh(filter)
             gate = self.gate_convs[i](residual)  # kernel=(1,2)
             gate = torch.sigmoid(gate)
-            # x=filter=gate: (B, residual_size, D, F)
+            # x=filter=gate: (B, residual_size, D, F), F decrease
             x = filter * gate
 
             # ***************** construct dynamic graphs from e ***************** #
@@ -398,6 +400,7 @@ class GCNMdynamic(nn.Module):
                 skip = skip[:, :, :, -s.size(3):]
             except:
                 skip = 0
+            # import pdb; pdb.set_trace()
             skip = s + skip
 
             if self.gcn_bool and self.supports is not None:
@@ -414,7 +417,7 @@ class GCNMdynamic(nn.Module):
             x = x + residual[:, :, :, -x.size(3):]
 
             x = self.bn[i](x)
-
+        # import pdb; pdb.set_trace()
         skip = self.skipE(x) + skip
 
         x = F.relu(skip)
