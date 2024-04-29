@@ -23,6 +23,7 @@ warnings.filterwarnings('ignore')
 class Exp_GCNM(Exp_GCNMbasic):
     def __init__(self, config):
         super(Exp_GCNM, self).__init__(config) ## init device
+        self.debug_mode = config['DEFAULT'].getboolean('debug')
         # result save
         testing_info = "model_{}_missR_{:.2f}_support_{}_{}".format(
             self.model_name,
@@ -232,10 +233,11 @@ class Exp_GCNM(Exp_GCNMbasic):
 
                 if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
-                    wandb.log({
-                        "loss": loss.item(),
-                        "iters": epoch * num_batch + i + 1,
-                    })
+                    if not self.debug_mode:
+                        wandb.log({
+                            "loss": loss.item(),
+                            "iters": epoch * num_batch + i + 1,
+                        })
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.train_epochs - epoch) * (train_steps // self.batch_size) - i)
                     print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
@@ -260,17 +262,18 @@ class Exp_GCNM(Exp_GCNMbasic):
 
             print("\n Test_mse: {0:.7f} Test_mae: {1:.7f} Test_mape: {2:.7f}".format(test_loss_mse, test_loss_mae,
                                                                                      test_loss_mape))
-            wandb.log({
-                "Epoch": epoch + 1,
-                "Steps": train_steps,
-                "Train_mae": train_loss,
-                "Vali_mse": vali_loss_mse,
-                "Test_mse": test_loss_mse,
-                "Vali_mape": vali_loss_mape,
-                "Test_mae": test_loss_mae,
-                "Test_mape": test_loss_mape,
-                "Vali_mae": vali_loss_mae,
-            }, step = epoch)
+            if not self.debug_mode:
+                wandb.log({
+                    "Epoch": epoch + 1,
+                    "Steps": train_steps,
+                    "Train_mae": train_loss,
+                    "Vali_mse": vali_loss_mse,
+                    "Test_mse": test_loss_mse,
+                    "Vali_mape": vali_loss_mape,
+                    "Test_mae": test_loss_mae,
+                    "Test_mape": test_loss_mape,
+                    "Vali_mae": vali_loss_mae,
+                }, step = epoch)
             early_stopping(vali_loss_mse, self.model, self.save_path)
 
             if early_stopping.early_stop:
@@ -334,11 +337,12 @@ class Exp_GCNM(Exp_GCNMbasic):
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print('[Average value] mae:{}, rmse:{}, mape:{}'.format(mae, rmse, mape))
-        wandb.log({
-            "Test Average mae": mae,
-            "Test Average rmse": rmse,
-            "Test Average mape": mape,
-        })
+        if not self.debug_mode:
+            wandb.log({
+                "Test Average mae": mae,
+                "Test Average rmse": rmse,
+                "Test Average mape": mape,
+            })
 
         np.save(self.save_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(self.save_path + 'pred.npy', preds)
