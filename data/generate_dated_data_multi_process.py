@@ -150,9 +150,10 @@ def prepare_dataset(output_dit, df, x_offsets, y_offsets, masking, dists, L, S, 
 
     num_samples, num_nodes = df.shape
     data = df.values  # (num_samples, num_nodes)
-    speed_tensor = data.clip(0, 100)  # (N, D)
+    # speed_tensor = data.clip(0, 100)  # (N, D)
+    speed_tensor = data
     max_speed = speed_tensor.max().max()
-    speed_tensor = speed_tensor / max_speed  # (N, D)
+    # speed_tensor = speed_tensor / max_speed  # (N, D)
 
     array = np.array(data)
     array_mask = get_0_1_array(array, 1 - mask_ones_proportion, seed) #(N, D)

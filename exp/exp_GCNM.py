@@ -130,8 +130,8 @@ class Exp_GCNM(Exp_GCNMbasic):
 
                 pred = outputs.detach().cpu() # (B, L, D)
                 true = batch_y.detach().cpu()
-                pred = torch.mul(pred, torch.Tensor(self.max_speed))
-                true = torch.mul(true, torch.Tensor(self.max_speed))
+                pred = self.scaler.inverse_transform(pred)
+                true = self.scaler.inverse_transform(true)
 
                 loss_mse = masked_mse(pred, true, 0)
                 loss_mae = masked_mae(pred, true, 0)
@@ -164,7 +164,7 @@ class Exp_GCNM(Exp_GCNMbasic):
                                 train_val_test_split=self.data_split)
         '''
         # read the pre-processed & splitted dataset from file
-        self.full_dataset, self.dataloader = load_dataset(traffic_df_filename, stat_file, self.batch_size, self.mask_ones_proportion)
+        self.full_dataset, self.dataloader, self.scaler = load_dataset(traffic_df_filename, stat_file, self.batch_size, self.mask_ones_proportion)
         train_loader = self.dataloader['train_loader']
         vali_loader = self.dataloader['val_loader']
         test_loader = self.dataloader['test_loader']
@@ -224,9 +224,9 @@ class Exp_GCNM(Exp_GCNMbasic):
                     else:
                         outputs = self.model(batch_x, x_hist)
 
-                outputs = torch.mul(outputs, torch.Tensor(self.max_speed).to(self.device))# (B, L, D)
+                outputs = self.scaler.inverse_transform(outputs).to(self.device)# (B, L, D)
                 batch_y = batch_y[:, -self.pred_len:, :].to(self.device) # (B, pred_len, D)
-                batch_y = torch.mul(batch_y, torch.Tensor(self.max_speed).to(self.device))
+                batch_y = self.scaler.inverse_transform(batch_y).to(self.device)
                 # loss = masked_mse(outputs, batch_y[:,:,:], 0)
                 loss = masked_mae(outputs, batch_y, 0)  # [N, L, D]
                 train_loss.append(loss.item())
@@ -321,8 +321,8 @@ class Exp_GCNM(Exp_GCNMbasic):
                         outputs = self.model(batch_x, x_hist)
 
                 batch_y = batch_y[:, -self.pred_len:, :].to(self.device)  # (B, pred_len, D)
-                pred = outputs.detach().cpu().numpy() * self.max_speed  # .squeeze()
-                true = batch_y.detach().cpu().numpy() * self.max_speed # .squeeze()
+                pred = self.scaler.inverse_transform(outputs).detach().cpu().numpy()  # .squeeze()
+                true = self.scaler.inverse_transform(batch_y).detach().cpu().numpy()  # .squeeze()
 
                 preds.append(pred)
                 trues.append(true)

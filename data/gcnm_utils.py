@@ -8,6 +8,21 @@ from scipy.sparse import linalg
 import scipy.sparse as sp
 import tqdm
 
+class StandardScaler:
+    """
+    Standard the input
+    """
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def transform(self, data):
+        return (data - self.mean) / self.std
+
+    def inverse_transform(self, data):
+        return (data * self.std) + self.mean
+
 class DataLoader(object):
     def __init__(self, xs, dateTime, ys, batch_size, pad_with_last_sample=True):
         """
@@ -161,13 +176,26 @@ def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportio
         data['dateTime_' + cat] = cat_data['dateTime']
         data['y_' + cat] = cat_data['y']
         data['max_speed'] = cat_data['max_speed']
+    
+    # cal the mean and std of no zero numbers
+    nonzero_values = data['x_train'][:, 0, ...][data['x_train'][:, 0, ...] != 0]
+    scaler = StandardScaler(mean=nonzero_values.mean(), std=nonzero_values.std())
+    x_train, x_val, x_test = data['x_train'], data['x_val'], data['x_test']
+    y_train, y_val, y_test = data['y_train'], data['y_val'], data['y_test']
+    x_train[:, 0, ...] = scaler.transform(x_train[:, 0, ...])
+    x_val[:, 0, ...] = scaler.transform(x_val[:, 0, ...])
+    x_test[:, 0, ...] = scaler.transform(x_test[:, 0, ...])
+    y_train = scaler.transform(y_train)
+    y_val = scaler.transform(y_val)
+    y_test = scaler.transform(y_test)
+
 
     # The data is scaled by "max_speed"
-    data['train_loader'] = DataLoader(data['x_train'], data['dateTime_train'], data['y_train'], batch_size)
-    data['val_loader'] = DataLoader(data['x_val'], data['dateTime_val'], data['y_val'], batch_size)
-    data['test_loader'] = DataLoader(data['x_test'], data['dateTime_test'], data['y_test'], batch_size)
+    data['train_loader'] = DataLoader(x_train, data['dateTime_train'], y_train, batch_size)
+    data['val_loader'] = DataLoader(x_val, data['dateTime_val'], y_val, batch_size)
+    data['test_loader'] = DataLoader(x_test, data['dateTime_test'], y_test, batch_size)
     # import pdb; pdb.set_trace()
-    return df, data
+    return df, data, scaler
 
 ## newly added method from generating the adjacency matrix: directed graph
 def get_adjacency_matrix(distance_df, sensor_ids, normalized_k=0.1):
