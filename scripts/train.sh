@@ -1,0 +1,1 @@
+python main.py --config ./configs/METR_LA_GCNM.conf --itr 1
