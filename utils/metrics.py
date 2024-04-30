@@ -51,7 +51,7 @@ def MAPE_np(pred, true, mask_value=0):
         mask = np.where(np.abs(true) > (mask_value), True, False)
         true = true[mask]
         pred = pred[mask]
-        if len(true) or len(pred) == 0:
+        if len(true) == 0 or len(pred) == 0:
             return 0
     return np.mean(np.absolute(np.divide((true - pred), (true))))*100
 
@@ -61,7 +61,7 @@ def RMSE_np(pred, true, mask_value=0):
         mask = np.where(np.abs(true) > (mask_value), True, False)
         true = true[mask]
         pred = pred[mask]
-        if len(true) or len(pred) == 0:
+        if len(true) == 0 or len(pred) == 0:
             return 0
     RMSE = np.sqrt(np.mean(np.square(pred-true)))
     return RMSE

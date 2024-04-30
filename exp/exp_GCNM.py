@@ -100,6 +100,9 @@ class Exp_GCNM(Exp_GCNMbasic):
         # BiTGraph Loss
         total_loss_rmse_BitG = []
         total_loss_mape_BitG = []
+
+        preds = []
+        trues = []
         with torch.no_grad():
             for i, (batch_x, batch_dateTime, batch_y) in enumerate(vali_loader.get_iterator()):
                 # batch_x: (B, 8, L, D)
@@ -137,6 +140,9 @@ class Exp_GCNM(Exp_GCNMbasic):
                 pred = self.scaler.inverse_transform(pred)
                 true = self.scaler.inverse_transform(true)
 
+                preds.append(pred)
+                trues.append(true)
+
                 loss_mse = masked_mse(pred, true, 0)
                 loss_mae = masked_mae(pred, true, 0)
                 loss_mape = masked_mape(pred, true, 0)
@@ -154,15 +160,23 @@ class Exp_GCNM(Exp_GCNMbasic):
                     total_loss_rmse_BitG.append(loss_rmse_BG)
                     total_loss_mape_BitG.append(loss_mape_BG)
 
+        preds = torch.cat(preds,dim=0).numpy()
+        trues = torch.cat(trues,dim=0).numpy()
+
         # import pdb; pdb.set_trace()
         total_loss_mse = np.average(total_loss_mse)
         total_loss_mae = np.average(total_loss_mae)
         total_loss_mape = np.average(total_loss_mape)
         total_loss_rmse_BitG = np.average(total_loss_rmse_BitG)
         total_loss_mape_BitG = np.average(total_loss_mape_BitG)
+
+        # concat then compute, cal once
+        once_loss_rmse_BitG = RMSE_np(preds.squeeze(), trues.squeeze(), 0)
+        once_loss_mape_BitG = MAPE_np(preds.squeeze(), trues.squeeze(), 0)
+
         self.model.train()
         # return total_loss
-        return total_loss_mse, total_loss_mae, total_loss_mape, total_loss_rmse_BitG, total_loss_mape_BitG
+        return total_loss_mse, total_loss_mae, total_loss_mape, total_loss_rmse_BitG, total_loss_mape_BitG, once_loss_rmse_BitG, once_loss_mape_BitG
 
     def train(self):
         traffic_df_filename = os.path.join(self.root_path, self.data_path)
@@ -279,8 +293,8 @@ class Exp_GCNM(Exp_GCNMbasic):
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
-            vali_loss_mse, vali_loss_mae, vali_loss_mape, vali_loss_rmse_BG, vali_loss_mape_BG = self.vali(vali_loader)
-            test_loss_mse, test_loss_mae, test_loss_mape, test_loss_rmse_BG, test_loss_mape_BG = self.vali(test_loader)
+            vali_loss_mse, vali_loss_mae, vali_loss_mape, vali_loss_rmse_BG, vali_loss_mape_BG, vali_once_loss_rmse_BG, vali_once_loss_mape_BG = self.vali(vali_loader)
+            test_loss_mse, test_loss_mae, test_loss_mape, test_loss_rmse_BG, test_loss_mape_BG, test_once_loss_rmse_BG, test_once_loss_mape_BG = self.vali(test_loader)
             print(
                 "Epoch: {0}, Steps: {1} | Train Loss mae: {2:.7f} Vali Loss mse: {3:.7f} Test Loss mse: {4:.7f} Vali mape: {5:.7f}".format(
                     epoch + 1, train_steps, train_loss, vali_loss_mse, test_loss_mse, vali_loss_mape))
@@ -290,6 +304,9 @@ class Exp_GCNM(Exp_GCNMbasic):
             
             print("\n Vali_rmse_BG: {0:.7f} Vali_mape_BG: {1:.7f} Test_rmse_BG: {2:.7f} Test_mape_BG: {3:.7f}".format(vali_loss_rmse_BG, vali_loss_mape_BG,
                                                                                      test_loss_rmse_BG, test_loss_mape_BG))
+            
+            print("\n Vali_rmse_BG_once: {0:.7f} Vali_mape_BG_once: {1:.7f} Test_rmse_BG_once: {2:.7f} Test_mape_BG_once: {3:.7f}".format(vali_once_loss_rmse_BG, vali_once_loss_mape_BG,
+                                                                                     test_once_loss_rmse_BG, test_once_loss_mape_BG))
             # import pdb; pdb.set_trace()
             if not self.debug_mode:
                 wandb.log({
