@@ -2,6 +2,8 @@ import argparse, configparser
 import os
 import torch
 import wandb
+import pytz
+import datetime
 from exp.exp_GCNM import Exp_GCNM
 
 parser = argparse.ArgumentParser()
@@ -22,7 +24,16 @@ config['DEFAULT']['debug'] = str(args.debug)  # Store booleans as string
 config_dict = {section: dict(config.items(section)) for section in config.sections()}
 
 if not args.debug:
-    wandb.init(project='Missing Value Forecasting', name='GCNM-METR-20%-24')
+    timezone = pytz.timezone('Asia/Shanghai')
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_utc8 = now_utc.astimezone(timezone)
+    formatted_time = now_utc8.strftime("%Y%m%d%H%M%S")
+    
+    name = 'GCNM-' + config['Data']['dataset_name'] + '-Mask' + "{:.2f}".format(1 - float(config['Data']['mask_ones_proportion']))\
+        + '-L' + str(config['Model']['L']) + '-nd' + str(config['Model']['nd']) + '-nw' + str(config['Model']['nw'])\
+        + '-' + formatted_time
+    import pdb; pdb.set_trace()
+    wandb.init(project='Missing Value Forecasting', name=name)
     wandb.config.update(config_dict)
     wandb.config["iteration"] = args.itr
 
