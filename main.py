@@ -5,6 +5,7 @@ import wandb
 import pytz
 import datetime
 from exp.exp_GCNM import Exp_GCNM
+from utils.tools import init_seeds
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", default='configs/PEMS_BAY_GCNM.conf', type=str,
@@ -31,11 +32,12 @@ if not args.debug:
     
     name = 'GCNM-' + config['Data']['dataset_name'] + '-Mask' + "{:.2f}".format(1 - float(config['Data']['mask_ones_proportion']))\
         + '-L' + str(config['Model']['L']) + '-nd' + str(config['Model']['nd']) + '-nw' + str(config['Model']['nw'])\
-        + '-' + formatted_time
-    import pdb; pdb.set_trace()
+        +'-seed' + str(config['Model']['seed']) + '-' + formatted_time
     wandb.init(project='Missing Value Forecasting', name=name)
     wandb.config.update(config_dict)
     wandb.config["iteration"] = args.itr
+
+init_seeds(int(config['Model']['seed']))
 
 for ii in range(args.itr):
     print('Main Interation Round {}'.format(ii))

@@ -44,6 +44,28 @@ def metric(pred, real):
 
     return mae, mse, rmse, mape, mspe
 
+epsilon=1e-10
+
+def MAPE_np(pred, true, mask_value=0):
+    if mask_value != None:
+        mask = np.where(np.abs(true) > (mask_value), True, False)
+        true = true[mask]
+        pred = pred[mask]
+        if len(true) or len(pred) == 0:
+            return 0
+    return np.mean(np.absolute(np.divide((true - pred), (true))))*100
+
+
+def RMSE_np(pred, true, mask_value=0):
+    if mask_value != None:
+        mask = np.where(np.abs(true) > (mask_value), True, False)
+        true = true[mask]
+        pred = pred[mask]
+        if len(true) or len(pred) == 0:
+            return 0
+    RMSE = np.sqrt(np.mean(np.square(pred-true)))
+    return RMSE
+
 ## the loss metric for tensors
 def masked_mse(preds, labels, null_val=np.nan):
     if np.isnan(null_val):

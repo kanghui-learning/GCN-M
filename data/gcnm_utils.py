@@ -154,7 +154,7 @@ def load_adj(pkl_filename, adjtype):
     return sensor_ids, sensor_id_to_ind, adj
 
 
-def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportion):
+def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportion, debug):
     """
 
     :param traffic_df_filename:
@@ -189,6 +189,11 @@ def load_dataset(traffic_df_filename, stat_file, batch_size, mask_ones_proportio
     y_val = scaler.transform(y_val)
     y_test = scaler.transform(y_test)
 
+    if debug:
+        x_train, x_val, x_test = x_train[:1000, ...], x_val[:1000, ...], x_test[:1000, ...]
+        y_train, y_val, y_test = y_train[:1000, ...], y_val[:1000, ...], y_test[:1000, ...]
+        data['dateTime_train'], data['dateTime_val'], data['dateTime_test'] = \
+            data['dateTime_train'][:1000, ...], data['dateTime_val'][:1000, ...], data['dateTime_test'][:1000, ...]
 
     # The data is scaled by "max_speed"
     data['train_loader'] = DataLoader(x_train, data['dateTime_train'], y_train, batch_size)
