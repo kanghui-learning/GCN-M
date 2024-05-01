@@ -30,7 +30,7 @@ Step1:
 Step2:  Preprocess raw data
 
 ```
-python data/generate_dated_data.py
+bash scripts/generate_data.sh
 ```
 
 
@@ -38,7 +38,13 @@ python data/generate_dated_data.py
 ### Usage
 
 ```
-python main.py --config CONFIG_FILE --itr NBR_ITERATION
+bash scripts/train.sh
+```
+
+### Debug
+
+```
+bash scripts/debug.sh
 ```
 
 
